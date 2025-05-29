@@ -1,144 +1,61 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ceren travels</title>
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
-<style>
-  body, html {
-    margin: 0; padding: 0; height: 100%;
-    font-family: 'Helvetica Neue', sans-serif;
-  }
-  #map {
-    height: 100vh;
-    width: 100vw;
-  }
-  #searchBox {
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;
-    background: white;
-    padding: 10px;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  }
-  #searchInput {
-    width: 250px;
-    padding: 6px;
-    font-size: 16px;
-  }
-</style>
-</head>
-<body>
-  <div id="searchBox">
-    <input id="searchInput" type="text" placeholder="ceren travels to..." />
-    <button id="addBtn">Add</button>
-  </div>
-  <div id="map"></div>
+// index.js
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+import { initializeApp } from "firebase/app";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs
+} from "firebase/firestore";
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-    import {
-      getFirestore,
-      initializeFirestore,
-      collection,
-      addDoc,
-      getDocs,
-    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+// Firebase yapılandırması (storageBucket appspot.com oldu)
+const firebaseConfig = {
+  apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
+  authDomain: "ceren-travels.firebaseapp.com",
+  projectId: "ceren-travels",
+  storageBucket: "ceren-travels.appspot.com",
+  messagingSenderId: "579239744378",
+  appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
+};
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
-      authDomain: "ceren-travels.firebaseapp.com",
-      projectId: "ceren-travels",
-      storageBucket: "ceren-travels.appspot.com",
-      messagingSenderId: "579239744378",
-      appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
-    };
+// Firebase'i başlat
+const app = initializeApp(firebaseConfig);
 
-    const app = initializeApp(firebaseConfig);
-    const db = initializeFirestore(app, {
-      experimentalForceLongPolling: true,
-      useFetchStreams: false,
+// Firestore referansı al
+const db = getFirestore(app);
+
+// Şehri eklemek için fonksiyon (örnek)
+async function addCity(cityName, coords) {
+  try {
+    const docRef = await addDoc(collection(db, "cities"), {
+      name: cityName,
+      location: coords,
+      createdAt: new Date()
     });
+    console.log("City added with ID: ", docRef.id);
+  } catch (e) {
+    console.error("Error adding city: ", e);
+  }
+}
 
-    const map = L.map('map').setView([20, 0], 2);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    function createMarker(data) {
-      const marker = L.marker([data.lat, data.lng]).addTo(map);
-      marker.bindPopup(`<strong>${data.name}</strong><br>${data.date || ''}<br>${data.notes || ''}`);
-    }
-
-    async function loadMarkers() {
-      const snapshot = await getDocs(collection(db, "markers"));
-      snapshot.forEach(doc => {
-        createMarker(doc.data());
-      });
-    }
-
-    loadMarkers();
-
-    map.on('click', async (e) => {
-      const name = prompt("City name:");
-      if (!name) return;
-      const notes = prompt("Notes:");
-      const date = prompt("Date of visit (e.g. 2024-05-29):");
-      try {
-        await addDoc(collection(db, "markers"), {
-          lat: e.latlng.lat,
-          lng: e.latlng.lng,
-          name,
-          notes: notes || '',
-          date: date || ''
-        });
-        createMarker({
-          lat: e.latlng.lat,
-          lng: e.latlng.lng,
-          name,
-          notes: notes || '',
-          date: date || ''
-        });
-      } catch (e) {
-        alert("Error adding marker: " + e.message);
-      }
+// Tüm şehirleri çekmek için fonksiyon (örnek)
+async function getCities() {
+  try {
+    const querySnapshot = await getDocs(collection(db, "cities"));
+    const cities = [];
+    querySnapshot.forEach((doc) => {
+      cities.push({ id: doc.id, ...doc.data() });
     });
+    console.log("Cities:", cities);
+    return cities;
+  } catch (e) {
+    console.error("Error fetching cities: ", e);
+    return [];
+  }
+}
 
-    document.getElementById("addBtn").addEventListener("click", async () => {
-      const city = document.getElementById("searchInput").value.trim();
-      if (!city) return alert("Please enter a city.");
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
-        const data = await res.json();
-        if (data.length === 0) return alert("City not found.");
-        const { lat, lon, display_name } = data[0];
-        const notes = prompt("Notes:");
-        const date = prompt("Date of visit (e.g. 2024-05-29):");
-        const cityData = {
-          lat: parseFloat(lat),
-          lng: parseFloat(lon),
-          name: display_name,
-          notes: notes || '',
-          date: date || ''
-        };
-        await addDoc(collection(db, "markers"), cityData);
-        createMarker(cityData);
-        map.setView([lat, lon], 5);
-        document.getElementById("searchInput").value = "";
-      } catch (e) {
-        alert("Error fetching city data: " + e.message);
-      }
-    });
-  </script>
-</body>
-</html>
+// Test amaçlı örnek kullanım
+(async () => {
+  await addCity("Istanbul", { lat: 41.0082, lng: 28.9784 });
+  await getCities();
+})();
