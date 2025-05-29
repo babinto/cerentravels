@@ -32,18 +32,48 @@
       padding: 10px;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      display: flex;
+      gap: 10px;
     }
     #searchInput {
       width: 250px;
       padding: 6px;
       font-size: 16px;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #222;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #555;
+    }
+    .leaflet-popup-content button {
+      margin-top: 5px;
+      margin-right: 5px;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 3px;
+      background-color: #222;
+      color: #fff;
+    }
+    .leaflet-popup-content button:hover {
+      background-color: #555;
     }
   </style>
 </head>
 <body>
   <div id="searchBox">
     <input type="text" id="searchInput" placeholder="Search for a city..." />
-    <button onclick="searchCity()">Add</button>
+    <button id="addCityBtn">Add</button>
   </div>
   <div id="map"></div>
 
@@ -61,6 +91,60 @@
 
     let markers = JSON.parse(localStorage.getItem('cityMarkers')) || [];
 
+    function createMarker(lat, lng, name) {
+      const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+      marker.bindPopup(createPopupContent(lat, lng, name));
+      marker.on('dragend', function(e) {
+        const { lat, lng } = e.target.getLatLng();
+        updateMarkerPosition(name, lat, lng);
+      });
+      return marker;
+    }
+
+    function createPopupContent(lat, lng, name) {
+      return `<strong>${name}</strong><br>
+      <button onclick="editMarker('${name}')">Edit</button>
+      <button onclick="deleteMarker('${name}')">Delete</button>`;
+    }
+
+    function saveMarkers() {
+      localStorage.setItem('cityMarkers', JSON.stringify(markers));
+    }
+
+    function addMarker(lat, lng, name) {
+      markers.push({ lat, lng, name });
+      saveMarkers();
+      const marker = createMarker(lat, lng, name);
+      return marker;
+    }
+
+    function updateMarkerPosition(name, lat, lng) {
+      const index = markers.findIndex(m => m.name === name);
+      if (index > -1) {
+        markers[index].lat = lat;
+        markers[index].lng = lng;
+        saveMarkers();
+      }
+    }
+
+    function editMarker(name) {
+      const index = markers.findIndex(m => m.name === name);
+      if (index === -1) return;
+      const newName = prompt("Enter new city name:", name);
+      if (newName) {
+        markers[index].name = newName;
+        saveMarkers();
+        location.reload();
+      }
+    }
+
+    function deleteMarker(name) {
+      markers = markers.filter(m => m.name !== name);
+      saveMarkers();
+      location.reload();
+    }
+
+    // Load existing markers
     markers.forEach(({ lat, lng, name }) => {
       createMarker(lat, lng, name);
     });
@@ -69,53 +153,30 @@
       const name = prompt("Enter city name:");
       if (name) {
         const { lat, lng } = e.latlng;
-        createMarker(lat, lng, name);
-        saveMarker({ lat, lng, name });
+        addMarker(lat, lng, name);
       }
     });
 
-    function createMarker(lat, lng, name) {
-      const marker = L.marker([lat, lng], { draggable: true })
-        .addTo(map)
-        .bindPopup(`<strong>${name}</strong><br><button onclick="editMarker(${lat}, ${lng})">Edit</button> <button onclick="deleteMarker(${lat}, ${lng})">Delete</button>`);
-    }
-
-    function saveMarker(marker) {
-      markers.push(marker);
-      localStorage.setItem('cityMarkers', JSON.stringify(markers));
-    }
-
-    function editMarker(lat, lng) {
-      const index = markers.findIndex(m => m.lat === lat && m.lng === lng);
-      const newName = prompt("New city name:", markers[index].name);
-      if (newName) {
-        markers[index].name = newName;
-        localStorage.setItem('cityMarkers', JSON.stringify(markers));
-        location.reload();
-      }
-    }
-
-    function deleteMarker(lat, lng) {
-      markers = markers.filter(m => m.lat !== lat || m.lng !== lng);
-      localStorage.setItem('cityMarkers', JSON.stringify(markers));
-      location.reload();
-    }
-
     async function searchCity() {
-      const city = document.getElementById("searchInput").value;
+      const city = document.getElementById("searchInput").value.trim();
       if (!city) return;
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${city}`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
       const data = await res.json();
       if (data.length > 0) {
         const { lat, lon, display_name } = data[0];
-        createMarker(lat, lon, display_name);
-        saveMarker({ lat: parseFloat(lat), lng: parseFloat(lon), name: display_name });
+        addMarker(parseFloat(lat), parseFloat(lon), display_name);
         map.setView([lat, lon], 5);
         document.getElementById("searchInput").value = "";
       } else {
         alert("City not found.");
       }
     }
+
+    document.getElementById('addCityBtn').addEventListener('click', searchCity);
+
+    // Expose editMarker and deleteMarker to global scope for popup buttons
+    window.editMarker = editMarker;
+    window.deleteMarker = deleteMarker;
   </script>
 </body>
 </html>
