@@ -8,12 +8,12 @@ import {
   getDocs
 } from "firebase/firestore";
 
-// Firebase yapılandırması (storageBucket appspot.com oldu)
+// Firebase config - senin verdiğin gibi
 const firebaseConfig = {
   apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
   authDomain: "ceren-travels.firebaseapp.com",
   projectId: "ceren-travels",
-  storageBucket: "ceren-travels.appspot.com",
+  storageBucket: "ceren-travels.firebasestorage.app",
   messagingSenderId: "579239744378",
   appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
 };
@@ -24,7 +24,7 @@ const app = initializeApp(firebaseConfig);
 // Firestore referansı al
 const db = getFirestore(app);
 
-// Şehri eklemek için fonksiyon (örnek)
+// Şehri Firestore'a eklemek için fonksiyon
 async function addCity(cityName, coords) {
   try {
     const docRef = await addDoc(collection(db, "cities"), {
@@ -38,7 +38,7 @@ async function addCity(cityName, coords) {
   }
 }
 
-// Tüm şehirleri çekmek için fonksiyon (örnek)
+// Şehirleri Firestore'dan çekmek için fonksiyon
 async function getCities() {
   try {
     const querySnapshot = await getDocs(collection(db, "cities"));
@@ -54,8 +54,8 @@ async function getCities() {
   }
 }
 
-// Test amaçlı örnek kullanım
+// Örnek kullanım
 (async () => {
-  await addCity("Istanbul", { lat: 41.0082, lng: 28.9784 });
+  await addCity("Ankara", { lat: 39.9334, lng: 32.8597 });
   await getCities();
 })();
