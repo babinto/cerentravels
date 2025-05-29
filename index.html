@@ -1,19 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
     <meta charset="UTF-8" />
+    <title>ceren travels</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Travel Map</title>
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
     <style>
       body {
         margin: 0;
         font-family: 'Helvetica Neue', sans-serif;
-        background-color: #fff;
-        color: #000;
       }
       #map {
         height: 100vh;
@@ -26,7 +20,6 @@
         transform: translateX(-50%);
         z-index: 1000;
         background: #fff;
-        border: 1px solid #ccc;
         padding: 10px;
         border-radius: 8px;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
@@ -37,27 +30,32 @@
         font-size: 16px;
       }
     </style>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
   </head>
   <body>
     <div id="searchBox">
-      <input type="text" id="searchInput" placeholder="Ceren travels to..." />
+      <input type="text" id="searchInput" placeholder="ceren travels to..." />
       <button onclick="searchCity()">Add</button>
     </div>
     <div id="map"></div>
 
-    <!-- Leaflet -->
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
     <script>
+      // Firebase ayarların (senin verdiğin config)
       const firebaseConfig = {
         apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
         authDomain: "ceren-travels.firebaseapp.com",
         projectId: "ceren-travels",
-        storageBucket: "ceren-travels.appspot.com",
+        storageBucket: "ceren-travels.firebasestorage.app",
         messagingSenderId: "579239744378",
         appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
       };
@@ -71,24 +69,35 @@
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
 
+      function createMarker(doc) {
+        const marker = L.marker([doc.lat, doc.lng], { draggable: false }).addTo(map);
+        marker.bindPopup(`<strong>${doc.name}</strong><br>${doc.date}<br>${doc.notes}`);
+      }
+
       async function loadMarkers() {
-        const snapshot = await db.collection('markers').get();
+        const snapshot = await db.collection("markers").get();
         snapshot.forEach(doc => {
-          const data = doc.data();
-          createMarker(data.lat, data.lng, data.name, data.notes, data.date, doc.id);
+          createMarker(doc.data());
         });
       }
 
-      function createMarker(lat, lng, name, notes = '', date = '', id = null) {
-        const marker = L.marker([lat, lng]).addTo(map);
-        marker.bindPopup(`
-          <strong>${name}</strong><br>
-          ${notes ? 'Notes: ' + notes + '<br>' : ''}
-          ${date ? 'Date: ' + date + '<br>' : ''}
-          <button onclick="editMarker('${id}')">Edit</button>
-          <button onclick="deleteMarker('${id}')">Delete</button>
-        `);
-      }
+      loadMarkers();
+
+      map.on('click', async function (e) {
+        const name = prompt("City name:");
+        if (!name) return;
+        const notes = prompt("Notes:");
+        const date = prompt("Date of visit (e.g. 2024-05-29):");
+        const data = {
+          lat: e.latlng.lat,
+          lng: e.latlng.lng,
+          name,
+          notes: notes || '',
+          date: date || ''
+        };
+        await db.collection("markers").add(data);
+        createMarker(data);
+      });
 
       async function searchCity() {
         const city = document.getElementById("searchInput").value;
@@ -97,50 +106,23 @@
         const data = await res.json();
         if (data.length > 0) {
           const { lat, lon, display_name } = data[0];
-          const notes = prompt("Enter notes:");
-          const date = prompt("Enter visit date:");
-
-          const docRef = await db.collection('markers').add({
+          const notes = prompt("Notes:");
+          const date = prompt("Date of visit (e.g. 2024-05-29):");
+          const cityData = {
             lat: parseFloat(lat),
             lng: parseFloat(lon),
             name: display_name,
-            notes,
-            date
-          });
-
-          createMarker(lat, lon, display_name, notes, date, docRef.id);
+            notes: notes || '',
+            date: date || ''
+          };
+          await db.collection("markers").add(cityData);
+          createMarker(cityData);
           map.setView([lat, lon], 5);
           document.getElementById("searchInput").value = "";
         } else {
           alert("City not found.");
         }
       }
-
-      async function editMarker(id) {
-        const doc = await db.collection('markers').doc(id).get();
-        const data = doc.data();
-
-        const newName = prompt("Edit city name:", data.name);
-        const newNotes = prompt("Edit notes:", data.notes);
-        const newDate = prompt("Edit date:", data.date);
-
-        await db.collection('markers').doc(id).set({
-          lat: data.lat,
-          lng: data.lng,
-          name: newName,
-          notes: newNotes,
-          date: newDate
-        });
-
-        location.reload();
-      }
-
-      async function deleteMarker(id) {
-        await db.collection('markers').doc(id).delete();
-        location.reload();
-      }
-
-      loadMarkers();
     </script>
   </body>
 </html>
