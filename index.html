@@ -33,11 +33,27 @@
       padding: 6px;
       font-size: 16px;
     }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: 14px;
+      margin-top: 5px;
+      resize: vertical;
+    }
+    input[type="date"] {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 5px;
+    }
+    .popup-content {
+      min-width: 200px;
+    }
   </style>
 </head>
 <body>
   <div id="searchBox">
-    <input type="text" id="searchInput" placeholder="Search for a city..." />
+    <input type="text" id="searchInput" placeholder="ceren travels to..." />
     <button onclick="searchCity()">Add</button>
   </div>
   <div id="map"></div>
@@ -52,36 +68,82 @@
 
     let markers = JSON.parse(localStorage.getItem('cityMarkers')) || [];
 
-    markers.forEach(({ lat, lng, name }) => {
-      createMarker(lat, lng, name);
-    });
+    function createMarker(lat, lng, name, notes = '', date = '') {
+      const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+      
+      const popupContent = document.createElement('div');
+      popupContent.className = 'popup-content';
+      popupContent.innerHTML = `
+        <strong>${name}</strong><br/>
+        <label>Notes:</label><br/>
+        <textarea id="notes" rows="3">${notes}</textarea><br/>
+        <label>Date visited:</label><br/>
+        <input type="date" id="date" value="${date}" /><br/><br/>
+        <button id="saveBtn">Save</button>
+        <button id="editBtn" style="display:none;">Edit</button>
+        <button id="deleteBtn">Delete</button>
+      `;
 
-    map.on('click', e => {
-      const name = prompt("Enter city name:");
-      if (name) {
-        const { lat, lng } = e.latlng;
-        createMarker(lat, lng, name);
-        saveMarker({ lat, lng, name });
+      marker.bindPopup(popupContent);
+
+      marker.on('popupopen', () => {
+        const saveBtn = popupContent.querySelector('#saveBtn');
+        const editBtn = popupContent.querySelector('#editBtn');
+        const deleteBtn = popupContent.querySelector('#deleteBtn');
+        const notesInput = popupContent.querySelector('#notes');
+        const dateInput = popupContent.querySelector('#date');
+
+        saveBtn.onclick = () => {
+          const newNotes = notesInput.value;
+          const newDate = dateInput.value;
+          updateMarker(lat, lng, name, newNotes, newDate);
+          marker.closePopup();
+        };
+
+        deleteBtn.onclick = () => {
+          deleteMarker(lat, lng);
+          marker.closePopup();
+        };
+
+        // Disable textarea and date input after save to simulate edit mode
+        editBtn.onclick = () => {
+          notesInput.disabled = false;
+          dateInput.disabled = false;
+          saveBtn.style.display = 'inline';
+          editBtn.style.display = 'none';
+        };
+
+        // Initially inputs enabled, hide edit button
+        notesInput.disabled = false;
+        dateInput.disabled = false;
+        saveBtn.style.display = 'inline';
+        editBtn.style.display = 'none';
+      });
+
+      marker.on('dragend', (e) => {
+        const newLatLng = e.target.getLatLng();
+        updateMarkerPosition(lat, lng, newLatLng.lat, newLatLng.lng);
+        lat = newLatLng.lat;
+        lng = newLatLng.lng;
+      });
+    }
+
+    function updateMarker(oldLat, oldLng, name, notes, date) {
+      const idx = markers.findIndex(m => m.lat === oldLat && m.lng === oldLng);
+      if (idx !== -1) {
+        markers[idx].name = name;
+        markers[idx].notes = notes;
+        markers[idx].date = date;
+        localStorage.setItem('cityMarkers', JSON.stringify(markers));
+        location.reload();
       }
-    });
-
-    function createMarker(lat, lng, name) {
-      const marker = L.marker([lat, lng], { draggable: true })
-        .addTo(map)
-        .bindPopup(`<strong>${name}</strong><br><button onclick="editMarker(${lat},${lng})">Edit</button> <button onclick="deleteMarker(${lat},${lng})">Delete</button>`);
     }
 
-    function saveMarker(marker) {
-      markers.push(marker);
-      localStorage.setItem('cityMarkers', JSON.stringify(markers));
-    }
-
-    function editMarker(lat, lng) {
-      const index = markers.findIndex(m => m.lat === lat && m.lng === lng);
-      if (index === -1) return;
-      const newName = prompt("New city name:", markers[index].name);
-      if (newName) {
-        markers[index].name = newName;
+    function updateMarkerPosition(oldLat, oldLng, newLat, newLng) {
+      const idx = markers.findIndex(m => m.lat === oldLat && m.lng === oldLng);
+      if (idx !== -1) {
+        markers[idx].lat = newLat;
+        markers[idx].lng = newLng;
         localStorage.setItem('cityMarkers', JSON.stringify(markers));
         location.reload();
       }
@@ -93,6 +155,24 @@
       location.reload();
     }
 
+    function saveMarker(marker) {
+      markers.push(marker);
+      localStorage.setItem('cityMarkers', JSON.stringify(markers));
+    }
+
+    markers.forEach(({ lat, lng, name, notes = '', date = '' }) => {
+      createMarker(lat, lng, name, notes, date);
+    });
+
+    map.on('click', e => {
+      const name = prompt("Enter city name:");
+      if (name) {
+        const { lat, lng } = e.latlng;
+        createMarker(lat, lng, name);
+        saveMarker({ lat, lng, name, notes: '', date: '' });
+      }
+    });
+
     async function searchCity() {
       const city = document.getElementById("searchInput").value.trim();
       if (!city) return;
@@ -101,7 +181,7 @@
       if (data.length > 0) {
         const { lat, lon, display_name } = data[0];
         createMarker(lat, lon, display_name);
-        saveMarker({ lat: parseFloat(lat), lng: parseFloat(lon), name: display_name });
+        saveMarker({ lat: parseFloat(lat), lng: parseFloat(lon), name: display_name, notes: '', date: '' });
         map.setView([lat, lon], 5);
         document.getElementById("searchInput").value = "";
       } else {
