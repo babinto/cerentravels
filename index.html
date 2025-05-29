@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Travel Map</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+e2SYXk3cZbQwZ+GpFfjFmj4p0wpl1LfXYQ4F4F8M="
+    crossorigin=""
+  />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Helvetica Neue', sans-serif;
+      background-color: #fff;
+      color: #000;
+    }
+    #map {
+      height: 100vh;
+      width: 100vw;
+    }
+    #searchBox {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+    #searchInput {
+      width: 250px;
+      padding: 6px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="searchBox">
+    <input type="text" id="searchInput" placeholder="Search for a city..." />
+    <button onclick="searchCity()">Add</button>
+  </div>
+  <div id="map"></div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-o9N1j7k8fV9JtzNQmn1L3FOVvYfO8Gnv2X+1x7iFf8Q="
+    crossorigin=""
+  ></script>
+  <script>
+    const map = L.map('map').setView([20, 0], 2);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let markers = JSON.parse(localStorage.getItem('cityMarkers')) || [];
+
+    markers.forEach(({ lat, lng, name }) => {
+      createMarker(lat, lng, name);
+    });
+
+    map.on('click', function (e) {
+      const name = prompt("Enter city name:");
+      if (name) {
+        const { lat, lng } = e.latlng;
+        createMarker(lat, lng, name);
+        saveMarker({ lat, lng, name });
+      }
+    });
+
+    function createMarker(lat, lng, name) {
+      const marker = L.marker([lat, lng], { draggable: true })
+        .addTo(map)
+        .bindPopup(`<strong>${name}</strong><br><button onclick="editMarker(${lat}, ${lng})">Edit</button> <button onclick="deleteMarker(${lat}, ${lng})">Delete</button>`);
+    }
+
+    function saveMarker(marker) {
+      markers.push(marker);
+      localStorage.setItem('cityMarkers', JSON.stringify(markers));
+    }
+
+    function editMarker(lat, lng) {
+      const index = markers.findIndex(m => m.lat === lat && m.lng === lng);
+      const newName = prompt("New city name:", markers[index].name);
+      if (newName) {
+        markers[index].name = newName;
+        localStorage.setItem('cityMarkers', JSON.stringify(markers));
+        location.reload();
+      }
+    }
+
+    function deleteMarker(lat, lng) {
+      markers = markers.filter(m => m.lat !== lat || m.lng !== lng);
+      localStorage.setItem('cityMarkers', JSON.stringify(markers));
+      location.reload();
+    }
+
+    async function searchCity() {
+      const city = document.getElementById("searchInput").value;
+      if (!city) return;
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${city}`);
+      const data = await res.json();
+      if (data.length > 0) {
+        const { lat, lon, display_name } = data[0];
+        createMarker(lat, lon, display_name);
+        saveMarker({ lat: parseFloat(lat), lng: parseFloat(lon), name: display_name });
+        map.setView([lat, lon], 5);
+        document.getElementById("searchInput").value = "";
+      } else {
+        alert("City not found.");
+      }
+    }
+  </script>
+</body>
+</html>
