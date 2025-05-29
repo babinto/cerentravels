@@ -1,128 +1,149 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>ceren travels</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <style>
-      body {
-        margin: 0;
-        font-family: 'Helvetica Neue', sans-serif;
-      }
-      #map {
-        height: 100vh;
-        width: 100vw;
-      }
-      #searchBox {
-        position: absolute;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 1000;
-        background: #fff;
-        padding: 10px;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-      }
-      #searchInput {
-        width: 250px;
-        padding: 6px;
-        font-size: 16px;
-      }
-    </style>
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
-  </head>
-  <body>
-    <div id="searchBox">
-      <input type="text" id="searchInput" placeholder="ceren travels to..." />
-      <button onclick="searchCity()">Add</button>
-    </div>
-    <div id="map"></div>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ceren travels</title>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+<style>
+  body, html {
+    margin: 0; padding: 0; height: 100%;
+    font-family: 'Helvetica Neue', sans-serif;
+  }
+  #map {
+    height: 100vh;
+    width: 100vw;
+  }
+  #searchBox {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+  #searchInput {
+    width: 250px;
+    padding: 6px;
+    font-size: 16px;
+  }
+</style>
+</head>
+<body>
+  <div id="searchBox">
+    <input id="searchInput" type="text" placeholder="ceren travels to..." />
+    <button id="addBtn">Add</button>
+  </div>
+  <div id="map"></div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- Firebase 9 Modüler SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      enableIndexedDbPersistence,
+      initializeFirestore,
+      query,
+      onSnapshot,
+      setLogLevel
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-    <script>
-      // Firebase ayarların (senin verdiğin config)
-      const firebaseConfig = {
-        apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
-        authDomain: "ceren-travels.firebaseapp.com",
-        projectId: "ceren-travels",
-        storageBucket: "ceren-travels.firebasestorage.app",
-        messagingSenderId: "579239744378",
-        appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
-      };
+    const firebaseConfig = {
+      apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
+      authDomain: "ceren-travels.firebaseapp.com",
+      projectId: "ceren-travels",
+      storageBucket: "ceren-travels.appspot.com",
+      messagingSenderId: "579239744378",
+      appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
+    };
 
-      firebase.initializeApp(firebaseConfig);
-      const db = firebase.firestore();
+    // Long polling ile Firestore başlat
+    const app = initializeApp(firebaseConfig);
+    const db = initializeFirestore(app, {
+      experimentalForceLongPolling: true
+    });
 
-      const map = L.map('map').setView([20, 0], 2);
+    const map = L.map('map').setView([20, 0], 2);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-      function createMarker(doc) {
-        const marker = L.marker([doc.lat, doc.lng], { draggable: false }).addTo(map);
-        marker.bindPopup(`<strong>${doc.name}</strong><br>${doc.date}<br>${doc.notes}`);
-      }
+    function createMarker(data) {
+      const marker = L.marker([data.lat, data.lng]).addTo(map);
+      marker.bindPopup(`<strong>${data.name}</strong><br>${data.date || ''}<br>${data.notes || ''}`);
+    }
 
-      async function loadMarkers() {
-        const snapshot = await db.collection("markers").get();
-        snapshot.forEach(doc => {
-          createMarker(doc.data());
-        });
-      }
+    async function loadMarkers() {
+      const snapshot = await getDocs(collection(db, "markers"));
+      snapshot.forEach(doc => {
+        createMarker(doc.data());
+      });
+    }
 
-      loadMarkers();
+    loadMarkers();
 
-      map.on('click', async function (e) {
-        const name = prompt("City name:");
-        if (!name) return;
-        const notes = prompt("Notes:");
-        const date = prompt("Date of visit (e.g. 2024-05-29):");
-        const data = {
+    map.on('click', async (e) => {
+      const name = prompt("City name:");
+      if (!name) return;
+      const notes = prompt("Notes:");
+      const date = prompt("Date of visit (e.g. 2024-05-29):");
+      try {
+        await addDoc(collection(db, "markers"), {
           lat: e.latlng.lat,
           lng: e.latlng.lng,
           name,
           notes: notes || '',
           date: date || ''
-        };
-        await db.collection("markers").add(data);
-        createMarker(data);
-      });
-
-      async function searchCity() {
-        const city = document.getElementById("searchInput").value;
-        if (!city) return;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${city}`);
-        const data = await res.json();
-        if (data.length > 0) {
-          const { lat, lon, display_name } = data[0];
-          const notes = prompt("Notes:");
-          const date = prompt("Date of visit (e.g. 2024-05-29):");
-          const cityData = {
-            lat: parseFloat(lat),
-            lng: parseFloat(lon),
-            name: display_name,
-            notes: notes || '',
-            date: date || ''
-          };
-          await db.collection("markers").add(cityData);
-          createMarker(cityData);
-          map.setView([lat, lon], 5);
-          document.getElementById("searchInput").value = "";
-        } else {
-          alert("City not found.");
-        }
+        });
+        createMarker({
+          lat: e.latlng.lat,
+          lng: e.latlng.lng,
+          name,
+          notes: notes || '',
+          date: date || ''
+        });
+      } catch (e) {
+        alert("Error adding marker: " + e.message);
       }
-    </script>
-  </body>
+    });
+
+    document.getElementById("addBtn").addEventListener("click", async () => {
+      const city = document.getElementById("searchInput").value.trim();
+      if (!city) return alert("Please enter a city.");
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
+        const data = await res.json();
+        if (data.length === 0) return alert("City not found.");
+        const { lat, lon, display_name } = data[0];
+        const notes = prompt("Notes:");
+        const date = prompt("Date of visit (e.g. 2024-05-29):");
+        const cityData = {
+          lat: parseFloat(lat),
+          lng: parseFloat(lon),
+          name: display_name,
+          notes: notes || '',
+          date: date || ''
+        };
+        await addDoc(collection(db, "markers"), cityData);
+        createMarker(cityData);
+        map.setView([lat, lon], 5);
+        document.getElementById("searchInput").value = "";
+      } catch (e) {
+        alert("Error fetching city data: " + e.message);
+      }
+    });
+  </script>
+</body>
 </html>
