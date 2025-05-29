@@ -44,19 +44,14 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Firebase 9 Modüler SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import {
       getFirestore,
+      initializeFirestore,
       collection,
       addDoc,
       getDocs,
-      enableIndexedDbPersistence,
-      initializeFirestore,
-      query,
-      onSnapshot,
-      setLogLevel
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -68,10 +63,10 @@
       appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
     };
 
-    // Long polling ile Firestore başlat
     const app = initializeApp(firebaseConfig);
     const db = initializeFirestore(app, {
-      experimentalForceLongPolling: true
+      experimentalForceLongPolling: true,
+      useFetchStreams: false,
     });
 
     const map = L.map('map').setView([20, 0], 2);
