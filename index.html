@@ -2,12 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Travel Map</title>
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body {
       margin: 0;
@@ -29,7 +26,7 @@
       border: 1px solid #ccc;
       padding: 10px;
       border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
     #searchInput {
       width: 250px;
@@ -59,7 +56,7 @@
       createMarker(lat, lng, name);
     });
 
-    map.on('click', function (e) {
+    map.on('click', e => {
       const name = prompt("Enter city name:");
       if (name) {
         const { lat, lng } = e.latlng;
@@ -71,7 +68,7 @@
     function createMarker(lat, lng, name) {
       const marker = L.marker([lat, lng], { draggable: true })
         .addTo(map)
-        .bindPopup(`<strong>${name}</strong><br><button onclick="editMarker(${lat}, ${lng})">Edit</button> <button onclick="deleteMarker(${lat}, ${lng})">Delete</button>`);
+        .bindPopup(`<strong>${name}</strong><br><button onclick="editMarker(${lat},${lng})">Edit</button> <button onclick="deleteMarker(${lat},${lng})">Delete</button>`);
     }
 
     function saveMarker(marker) {
@@ -81,6 +78,7 @@
 
     function editMarker(lat, lng) {
       const index = markers.findIndex(m => m.lat === lat && m.lng === lng);
+      if (index === -1) return;
       const newName = prompt("New city name:", markers[index].name);
       if (newName) {
         markers[index].name = newName;
@@ -96,9 +94,9 @@
     }
 
     async function searchCity() {
-      const city = document.getElementById("searchInput").value;
+      const city = document.getElementById("searchInput").value.trim();
       if (!city) return;
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${city}`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
       const data = await res.json();
       if (data.length > 0) {
         const { lat, lon, display_name } = data[0];
