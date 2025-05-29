@@ -3,27 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Travel Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <title>Ceren Travels Map</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
   <style>
-    body {
-      margin: 0;
+    body, html {
+      margin: 0; padding: 0; height: 100%;
       font-family: 'Helvetica Neue', sans-serif;
       background-color: #fff;
       color: #000;
     }
-    #map {
-      height: 100vh;
-      width: 100vw;
-    }
+    #map { height: 100vh; width: 100vw; }
     #searchBox {
-      position: absolute;
-      top: 20px;
-      left: 50%;
+      position: absolute; top: 20px; left: 50%;
       transform: translateX(-50%);
       z-index: 1000;
       background: #fff;
-      border: 1px solid #ccc;
       padding: 10px;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
@@ -33,161 +30,177 @@
       padding: 6px;
       font-size: 16px;
     }
-    textarea {
-      width: 100%;
-      box-sizing: border-box;
-      font-family: inherit;
-      font-size: 14px;
-      margin-top: 5px;
-      resize: vertical;
-    }
-    input[type="date"] {
-      width: 100%;
-      box-sizing: border-box;
-      margin-top: 5px;
-    }
-    .popup-content {
-      min-width: 200px;
-    }
   </style>
 </head>
 <body>
-  <div id="searchBox">
-    <input type="text" id="searchInput" placeholder="ceren travels to..." />
-    <button onclick="searchCity()">Add</button>
-  </div>
-  <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map').setView([20, 0], 2);
+<div id="searchBox">
+  <input type="text" id="searchInput" placeholder="ceren travels to..." />
+  <button onclick="searchCity()">Add</button>
+</div>
+<div id="map"></div>
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    let markers = JSON.parse(localStorage.getItem('cityMarkers')) || [];
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js"></script>
 
-    function createMarker(lat, lng, name, notes = '', date = '') {
-      const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
-      
-      const popupContent = document.createElement('div');
-      popupContent.className = 'popup-content';
-      popupContent.innerHTML = `
-        <strong>${name}</strong><br/>
-        <label>Notes:</label><br/>
-        <textarea id="notes" rows="3">${notes}</textarea><br/>
-        <label>Date visited:</label><br/>
-        <input type="date" id="date" value="${date}" /><br/><br/>
-        <button id="saveBtn">Save</button>
-        <button id="editBtn" style="display:none;">Edit</button>
-        <button id="deleteBtn">Delete</button>
-      `;
+<script>
+  // Firebase configuration senin verdiğin
+  const firebaseConfig = {
+    apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
+    authDomain: "ceren-travels.firebaseapp.com",
+    projectId: "ceren-travels",
+    storageBucket: "ceren-travels.firebasestorage.app",
+    messagingSenderId: "579239744378",
+    appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
+  };
 
-      marker.bindPopup(popupContent);
+  // Firebase'i başlat
+  const app = firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
 
-      marker.on('popupopen', () => {
-        const saveBtn = popupContent.querySelector('#saveBtn');
-        const editBtn = popupContent.querySelector('#editBtn');
-        const deleteBtn = popupContent.querySelector('#deleteBtn');
-        const notesInput = popupContent.querySelector('#notes');
-        const dateInput = popupContent.querySelector('#date');
+  // Haritayı oluştur
+  const map = L.map('map').setView([20, 0], 2);
 
-        saveBtn.onclick = () => {
-          const newNotes = notesInput.value;
-          const newDate = dateInput.value;
-          updateMarker(lat, lng, name, newNotes, newDate);
-          marker.closePopup();
-        };
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
-        deleteBtn.onclick = () => {
-          deleteMarker(lat, lng);
-          marker.closePopup();
-        };
+  // Marker objeleri ve Firestore doc ID'leri tutulacak
+  let markers = {};
 
-        // Disable textarea and date input after save to simulate edit mode
-        editBtn.onclick = () => {
-          notesInput.disabled = false;
-          dateInput.disabled = false;
-          saveBtn.style.display = 'inline';
-          editBtn.style.display = 'none';
-        };
-
-        // Initially inputs enabled, hide edit button
-        notesInput.disabled = false;
-        dateInput.disabled = false;
-        saveBtn.style.display = 'inline';
-        editBtn.style.display = 'none';
+  // Firestore'dan markerları yükle
+  function loadMarkers() {
+    db.collection('markers').get().then(snapshot => {
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        addMarkerToMap(data.lat, data.lng, data.name, data.notes, data.date, doc.id);
       });
+    });
+  }
 
-      marker.on('dragend', (e) => {
-        const newLatLng = e.target.getLatLng();
-        updateMarkerPosition(lat, lng, newLatLng.lat, newLatLng.lng);
-        lat = newLatLng.lat;
-        lng = newLatLng.lng;
+  // Haritaya marker ekle ve popup yap
+  function addMarkerToMap(lat, lng, name, notes, date, id) {
+    const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+
+    let popupContent = `<strong>${name}</strong><br>`;
+    popupContent += `Notes: ${notes || '-'}<br>`;
+    popupContent += `Visited: ${date || '-'}<br><br>`;
+    popupContent += `<button onclick="editMarker('${id}')">Edit</button> `;
+    popupContent += `<button onclick="deleteMarker('${id}')">Delete</button>`;
+
+    marker.bindPopup(popupContent);
+
+    marker.on('dragend', function(e) {
+      const pos = e.target.getLatLng();
+      db.collection('markers').doc(id).update({
+        lat: pos.lat,
+        lng: pos.lng
       });
-    }
-
-    function updateMarker(oldLat, oldLng, name, notes, date) {
-      const idx = markers.findIndex(m => m.lat === oldLat && m.lng === oldLng);
-      if (idx !== -1) {
-        markers[idx].name = name;
-        markers[idx].notes = notes;
-        markers[idx].date = date;
-        localStorage.setItem('cityMarkers', JSON.stringify(markers));
-        location.reload();
-      }
-    }
-
-    function updateMarkerPosition(oldLat, oldLng, newLat, newLng) {
-      const idx = markers.findIndex(m => m.lat === oldLat && m.lng === oldLng);
-      if (idx !== -1) {
-        markers[idx].lat = newLat;
-        markers[idx].lng = newLng;
-        localStorage.setItem('cityMarkers', JSON.stringify(markers));
-        location.reload();
-      }
-    }
-
-    function deleteMarker(lat, lng) {
-      markers = markers.filter(m => m.lat !== lat || m.lng !== lng);
-      localStorage.setItem('cityMarkers', JSON.stringify(markers));
-      location.reload();
-    }
-
-    function saveMarker(marker) {
-      markers.push(marker);
-      localStorage.setItem('cityMarkers', JSON.stringify(markers));
-    }
-
-    markers.forEach(({ lat, lng, name, notes = '', date = '' }) => {
-      createMarker(lat, lng, name, notes, date);
     });
 
-    map.on('click', e => {
-      const name = prompt("Enter city name:");
-      if (name) {
-        const { lat, lng } = e.latlng;
-        createMarker(lat, lng, name);
-        saveMarker({ lat, lng, name, notes: '', date: '' });
-      }
-    });
+    markers[id] = marker;
+  }
 
-    async function searchCity() {
-      const city = document.getElementById("searchInput").value.trim();
-      if (!city) return;
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
-      const data = await res.json();
-      if (data.length > 0) {
-        const { lat, lon, display_name } = data[0];
-        createMarker(lat, lon, display_name);
-        saveMarker({ lat: parseFloat(lat), lng: parseFloat(lon), name: display_name, notes: '', date: '' });
-        map.setView([lat, lon], 5);
-        document.getElementById("searchInput").value = "";
-      } else {
-        alert("City not found.");
-      }
-    }
-  </script>
+  // Marker ekleme formu için popup açar
+  map.on('click', function(e) {
+    const name = prompt("Enter city name:");
+    if (!name) return;
+
+    const notes = prompt("Add notes (optional):") || "";
+    const date = prompt("Visited date (optional, e.g. 2023-05-29):") || "";
+
+    // Firestore'a kaydet
+    db.collection('markers').add({
+      lat: e.latlng.lat,
+      lng: e.latlng.lng,
+      name: name,
+      notes: notes,
+      date: date,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(docRef => {
+      addMarkerToMap(e.latlng.lat, e.latlng.lng, name, notes, date, docRef.id);
+    });
+  });
+
+  // Şehir arama ve marker ekleme
+  async function searchCity() {
+    const city = document.getElementById("searchInput").value.trim();
+    if (!city) return alert("Please enter a city name.");
+
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
+    const data = await res.json();
+
+    if (data.length === 0) return alert("City not found.");
+
+    const place = data[0];
+
+    const name = place.display_name;
+    const lat = parseFloat(place.lat);
+    const lng = parseFloat(place.lon);
+
+    const notes = prompt("Add notes (optional):") || "";
+    const date = prompt("Visited date (optional, e.g. 2023-05-29):") || "";
+
+    // Firestore'a kaydet
+    db.collection('markers').add({
+      lat, lng, name, notes, date,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(docRef => {
+      addMarkerToMap(lat, lng, name, notes, date, docRef.id);
+      map.setView([lat, lng], 5);
+      document.getElementById("searchInput").value = "";
+    });
+  }
+
+  // Marker düzenleme popup açar
+  function editMarker(id) {
+    const marker = markers[id];
+    if (!marker) return;
+
+    const docRef = db.collection('markers').doc(id);
+    docRef.get().then(doc => {
+      if (!doc.exists) return alert("Marker not found.");
+
+      const data = doc.data();
+      const newName = prompt("City name:", data.name);
+      if (newName === null) return;
+      const newNotes = prompt("Notes:", data.notes || "");
+      if (newNotes === null) return;
+      const newDate = prompt("Visited date (e.g. 2023-05-29):", data.date || "");
+      if (newDate === null) return;
+
+      docRef.update({
+        name: newName,
+        notes: newNotes,
+        date: newDate
+      }).then(() => {
+        marker.setPopupContent(
+          `<strong>${newName}</strong><br>Notes: ${newNotes || '-'}<br>Visited: ${newDate || '-'}<br><br>
+           <button onclick="editMarker('${id}')">Edit</button> <button onclick="deleteMarker('${id}')">Delete</button>`
+        );
+        marker.openPopup();
+      });
+    });
+  }
+
+  // Marker silme
+  function deleteMarker(id) {
+    if (!confirm("Delete this marker?")) return;
+
+    db.collection('markers').doc(id).delete().then(() => {
+      map.removeLayer(markers[id]);
+      delete markers[id];
+    });
+  }
+
+  // Sayfa yüklendiğinde markerları yükle
+  loadMarkers();
+
+</script>
+
 </body>
 </html>
