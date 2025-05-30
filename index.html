@@ -1,61 +1,162 @@
-// index.js
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Travel Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Helvetica Neue', sans-serif;
+      background-color: #fff;
+      color: #000;
+    }
+    #map {
+      height: 100vh;
+      width: 100vw;
+    }
+    #searchBox {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    #searchInput {
+      width: 250px;
+      padding: 6px;
+      font-size: 16px;
+    }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: 14px;
+      margin-top: 5px;
+      resize: vertical;
+    }
+    input[type="date"] {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 5px;
+    }
+    .popup-content {
+      min-width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <div id="searchBox">
+    <input type="text" id="searchInput" placeholder="ceren travels to..." />
+    <button onclick="searchCity()">Add</button>
+  </div>
+  <div id="map"></div>
 
-import { initializeApp } from "firebase/app";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  getDocs
-} from "firebase/firestore";
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
+      authDomain: "ceren-travels.firebaseapp.com",
+      projectId: "ceren-travels",
+      storageBucket: "ceren-travels.appspot.com",
+      messagingSenderId: "579239744378",
+      appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
+    };
 
-// Firebase config - senin verdiğin gibi
-const firebaseConfig = {
-  apiKey: "AIzaSyCD_PLUZ_SAdlzOsqWWjzhi8voYUGd7ftE",
-  authDomain: "ceren-travels.firebaseapp.com",
-  projectId: "ceren-travels",
-  storageBucket: "ceren-travels.firebasestorage.app",
-  messagingSenderId: "579239744378",
-  appId: "1:579239744378:web:2b034208cf0842cb6cfcc3"
-};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-// Firebase'i başlat
-const app = initializeApp(firebaseConfig);
+    const map = L.map('map').setView([20, 0], 2);
 
-// Firestore referansı al
-const db = getFirestore(app);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-// Şehri Firestore'a eklemek için fonksiyon
-async function addCity(cityName, coords) {
-  try {
-    const docRef = await addDoc(collection(db, "cities"), {
-      name: cityName,
-      location: coords,
-      createdAt: new Date()
-    });
-    console.log("City added with ID: ", docRef.id);
-  } catch (e) {
-    console.error("Error adding city: ", e);
-  }
-}
+    function createMarker(id, lat, lng, name, notes = '', date = '') {
+      const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
 
-// Şehirleri Firestore'dan çekmek için fonksiyon
-async function getCities() {
-  try {
-    const querySnapshot = await getDocs(collection(db, "cities"));
-    const cities = [];
-    querySnapshot.forEach((doc) => {
-      cities.push({ id: doc.id, ...doc.data() });
-    });
-    console.log("Cities:", cities);
-    return cities;
-  } catch (e) {
-    console.error("Error fetching cities: ", e);
-    return [];
-  }
-}
+      const popupContent = document.createElement('div');
+      popupContent.className = 'popup-content';
+      popupContent.innerHTML = `
+        <strong>${name}</strong><br/>
+        <label>Notes:</label><br/>
+        <textarea id="notes" rows="3">${notes}</textarea><br/>
+        <label>Date visited:</label><br/>
+        <input type="date" id="date" value="${date}" /><br/><br/>
+        <button id="saveBtn">Save</button>
+        <button id="deleteBtn">Delete</button>
+      `;
 
-// Örnek kullanım
-(async () => {
-  await addCity("Ankara", { lat: 39.9334, lng: 32.8597 });
-  await getCities();
-})();
+      marker.bindPopup(popupContent);
+
+      marker.on('popupopen', () => {
+        const saveBtn = popupContent.querySelector('#saveBtn');
+        const deleteBtn = popupContent.querySelector('#deleteBtn');
+        const notesInput = popupContent.querySelector('#notes');
+        const dateInput = popupContent.querySelector('#date');
+
+        saveBtn.onclick = () => {
+          db.collection("cities").doc(id).update({
+            notes: notesInput.value,
+            date: dateInput.value
+          });
+          marker.closePopup();
+        };
+
+        deleteBtn.onclick = async () => {
+          await db.collection("cities").doc(id).delete();
+          map.removeLayer(marker);
+        };
+      });
+
+      marker.on('dragend', async (e) => {
+        const newLatLng = e.target.getLatLng();
+        await db.collection("cities").doc(id).update({
+          lat: newLatLng.lat,
+          lng: newLatLng.lng
+        });
+      });
+    }
+
+    async function loadMarkers() {
+      const snapshot = await db.collection("cities").get();
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        createMarker(doc.id, data.lat, data.lng, data.name, data.notes, data.date);
+      });
+    }
+
+    loadMarkers();
+
+    async function searchCity() {
+      const city = document.getElementById("searchInput").value.trim();
+      if (!city) return;
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
+      const data = await res.json();
+      if (data.length > 0) {
+        const { lat, lon, display_name } = data[0];
+        const docRef = await db.collection("cities").add({
+          lat: parseFloat(lat),
+          lng: parseFloat(lon),
+          name: display_name,
+          notes: '',
+          date: ''
+        });
+        createMarker(docRef.id, parseFloat(lat), parseFloat(lon), display_name);
+        map.setView([lat, lon], 5);
+        document.getElementById("searchInput").value = "";
+      } else {
+        alert("City not found.");
+      }
+    }
+  </script>
+</body>
+</html>
